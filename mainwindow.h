@@ -11,6 +11,7 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QGraphicsEllipseItem>
 
 
 QT_BEGIN_NAMESPACE
@@ -24,6 +25,8 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -42,35 +45,36 @@ protected:
 private:
     Ui::MainWindow *ui;
 
-    bool isDragging;
-    QGraphicsItem *draggedItem;
-
     bool drawing;
-    bool movingShape;
     QPointF startPosition;
     QPointF endPosition;
 
     enum Shape{ None, Rectangle, Select};
     Shape currentShape;
 
-    struct ShapeInfo
-    {
-        QGraphicsRectItem *item;
-        Shape shape;
-        QRectF rect;
-        bool isSelected;
-        QPointF start;
-    };
-
-    QVector<ShapeInfo> shapes;
-    ShapeInfo* selectedShape;
-
     QGraphicsScene *scene;
     QGraphicsRectItem *currentRectItem;
+    QGraphicsRectItem *selectedRectItem;
+    QGraphicsRectItem *highlightedRectItem;
+    QVector<QGraphicsEllipseItem*> handles;
+
+    QGraphicsEllipseItem *resizingHandle;
+    bool resizing;
+    QPointF resizeStartPos;
 
 private slots:
-    void on_pushButtonRect_clicked();
     void startDragging();
+    void on_pushButtonRectDraw_clicked();
+    void on_pushButtonSelect_clicked();
+
+    void addHandle(const QPointF &pos);
+    void removeHighlightPoints();
+    void highlightRectanglePoints();
+
+//    void handleHandleMousePress(QGraphicsSceneMouseEvent *event);
+//    void handleHandleMouseMove(QGraphicsSceneMouseEvent *event);
+//    void handleHandleMouseRelease(QGraphicsSceneMouseEvent *event);
+    void updateHandlePositions(const QRectF &rect);
 
 };
 #endif // MAINWINDOW_H
