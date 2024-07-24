@@ -26,13 +26,15 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     scene = new QGraphicsScene(this);
-//    scene->installEventFilter(this);
     ui->graphicsView->setScene(scene);
 
     ui->graphicsView->setFixedSize(700, 400);
     ui->graphicsView->setAcceptDrops(true);
     ui->graphicsView->viewport()->installEventFilter(this);
     ui->pushButtonRect->installEventFilter(this);
+
+    ui->toolBar->addWidget(ui->pushButtonDrawingTools);
+    ui->groupBoxShapesToDraw->hide();
 
     scene->setSceneRect(0, 0, ui->graphicsView->width(), ui->graphicsView->height());
 
@@ -46,28 +48,6 @@ MainWindow::~MainWindow()
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
-
-//    if (watched == scene)
-//    {
-//        if (event->type() == QEvent::GraphicsSceneMousePress)
-//        {
-//            QGraphicsSceneMouseEvent *mouseEvent = static_cast<QGraphicsSceneMouseEvent*>(event);
-//            handleHandleMousePress(mouseEvent);
-//            return true;
-//        }
-//        else if (event->type() == QEvent::GraphicsSceneMouseMove)
-//        {
-//            QGraphicsSceneMouseEvent *mouseEvent = static_cast<QGraphicsSceneMouseEvent*>(event);
-//            handleHandleMouseMove(mouseEvent);
-//            return true;
-//        }
-//        else if (event->type() == QEvent::GraphicsSceneMouseRelease)
-//        {
-//            QGraphicsSceneMouseEvent *mouseEvent = static_cast<QGraphicsSceneMouseEvent*>(event);
-//            handleHandleMouseRelease(mouseEvent);
-//            return true;
-//        }
-//    }
     if (watched == ui->pushButtonRect && event->type() == QEvent::MouseButtonPress)
     {
         QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
@@ -139,6 +119,13 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         endPosition = scenePos;
         qDebug() << "Started drawing at"<<startPosition;
     }
+    else if (currentShape == Line && event->button() == Qt::LeftButton)
+    {
+        drawing = true;
+        startPosition = scenePos;
+        endPosition = scenePos;
+        currentLineItem = scene->addLine(QLineF(startPosition, endPosition), QPen(Qt::black, 2));
+    }
     else if (currentShape == Select && event->button() == Qt::LeftButton)
     {
         QGraphicsRectItem *rectItem = dynamic_cast<QGraphicsRectItem *>(item);
@@ -188,7 +175,14 @@ void MainWindow:: mouseMoveEvent(QMouseEvent *event)
         {
             currentRectItem->setRect(newRect);
         }
-        qDebug() << " drawing ";
+        qDebug() << " drawing line";
+    }
+    else if (drawing && currentShape == Line)
+    {
+        QPointF scenePos = ui->graphicsView->mapToScene(event->pos());
+        endPosition = scenePos;
+        currentLineItem->setLine(QLineF(startPosition, endPosition));
+        highlightNearestPoint(scenePos);
     }
     if (resizing && resizingHandle)
     {
@@ -216,7 +210,7 @@ void MainWindow:: mouseMoveEvent(QMouseEvent *event)
         }
 
         selectedRectItem->setRect(newRect);
-
+        highlightedRectItem->setRect(newRect);
         updateHandlePositions(newRect);
     }
 }
@@ -239,6 +233,27 @@ void MainWindow:: mouseReleaseEvent(QMouseEvent *event)
 
         currentRectItem = nullptr;
         qDebug() << "drawn";
+    }
+    else if (drawing && currentShape == Line)
+    {
+        QPointF scenePos = ui->graphicsView->mapToScene(event->pos());
+        QPointF nearestPoint = findNearestPoint(scenePos);
+
+        //currentLineItem->setLine(QLineF(startPosition, endPosition));
+        if (nearestPoint != scenePos)
+        {
+            currentLineItem->setLine(QLineF(startPosition, nearestPoint));
+        }
+
+        if (highlightedPoint)
+        {
+            scene->removeItem(highlightedPoint);
+            delete highlightedPoint;
+            highlightedPoint = nullptr;
+        }
+
+        currentLineItem = nullptr;
+        drawing = false;
     }
     if (resizing && resizingHandle)
     {
@@ -268,6 +283,7 @@ void MainWindow::dragMoveEvent(QDragMoveEvent *event)
 
 void MainWindow::dropEvent(QDropEvent *event)
 {
+
     qDebug() << "Dropped";
     if (event->mimeData()->hasFormat("application/x-rect-item"))
     {
@@ -288,6 +304,7 @@ void MainWindow::dropEvent(QDropEvent *event)
 void MainWindow::on_pushButtonRectDraw_clicked()
 {
     currentShape = Rectangle;
+    ui->groupBoxShapesToDraw->hide();
 }
 
 void MainWindow::startDragging()
@@ -298,7 +315,7 @@ void MainWindow::startDragging()
 
     QDrag *drag = new QDrag(ui->pushButtonRect);
     drag->setMimeData(mimeData);
-    drag->exec(Qt::CopyAction);
+    drag->exec(Qt::CopyAction | Qt::MoveAction);
 }
 
 void MainWindow:: paintEvent(QPaintEvent *event)
@@ -309,6 +326,7 @@ void MainWindow:: paintEvent(QPaintEvent *event)
 void MainWindow::on_pushButtonSelect_clicked()
 {
     currentShape = Select;
+    ui->groupBoxShapesToDraw->hide();
 }
 
 
@@ -358,62 +376,6 @@ void MainWindow::removeHighlightPoints()
     handles.clear();
 }
 
-//void MainWindow::handleHandleMousePress(QGraphicsSceneMouseEvent *event)
-//{
-//    qDebug()<<"handleMousePress";
-
-//    QGraphicsItem *item = scene->itemAt(event->scenePos(), QTransform());
-//    QGraphicsEllipseItem *handle = dynamic_cast<QGraphicsEllipseItem *>(item);
-//    if (handle && handles.contains(handle))
-//    {
-//        resizingHandle = handle;
-//        resizingHandle->setBrush(Qt::green);  // Change to green when selected
-//        resizing = true;
-//    }
-//}
-
-//void MainWindow::handleHandleMouseMove(QGraphicsSceneMouseEvent *event)
-//{
-//    if (resizing && resizingHandle)
-//    {
-//        QPointF handlePos = event->scenePos();
-//        QRectF rect = selectedRectItem->rect();
-//        QRectF newRect = rect;
-
-//        // Update the rectangle's geometry based on the handle being moved
-//        if (resizingHandle == handles[0]) {
-//            newRect.setTopLeft(handlePos);
-//        } else if (resizingHandle == handles[1]) {
-//            newRect.setTopRight(handlePos);
-//        } else if (resizingHandle == handles[2]) {
-//            newRect.setBottomLeft(handlePos);
-//        } else if (resizingHandle == handles[3]) {
-//            newRect.setBottomRight(handlePos);
-//        } else if (resizingHandle == handles[4]) {
-//            newRect.setTop(handlePos.y());
-//        } else if (resizingHandle == handles[5]) {
-//            newRect.setBottom(handlePos.y());
-//        } else if (resizingHandle == handles[6]) {
-//            newRect.setLeft(handlePos.x());
-//        } else if (resizingHandle == handles[7]) {
-//            newRect.setRight(handlePos.x());
-//        }
-
-//        selectedRectItem->setRect(newRect);
-
-//        updateHandlePositions(newRect);
-//    }
-//}
-
-//void MainWindow::handleHandleMouseRelease(QGraphicsSceneMouseEvent *event)
-//{
-//    if (resizing && resizingHandle)
-//    {
-//        resizingHandle->setBrush(Qt::red);  // Change back to red when resizing ends
-//        resizingHandle = nullptr;
-//        resizing = false;
-//    }
-//}
 
 void MainWindow::updateHandlePositions(const QRectF &rect)
 {
@@ -433,14 +395,87 @@ void MainWindow::updateHandlePositions(const QRectF &rect)
     handles[7]->setRect(QRectF(rightMid - QPointF(5, 5), QSizeF(10, 10)));
 }
 
+QPointF MainWindow::findNearestPoint(QPointF scenePos)
+{
+    QPointF nearestPoint = scenePos;
+    qreal minDistance = std::numeric_limits<qreal>::max();
+
+    for (QGraphicsItem *item : scene->items())
+    {
+        QGraphicsRectItem *rectItem = dynamic_cast<QGraphicsRectItem *>(item);
+        if (rectItem)
+        {
+            QRectF rect = rectItem->rect();
+            QPointF points[8] = {
+                rect.topLeft(), rect.topRight(), rect.bottomLeft(), rect.bottomRight(),
+                (rect.topLeft() + rect.topRight()) / 2,
+                (rect.bottomLeft() + rect.bottomRight()) / 2,
+                (rect.topLeft() + rect.bottomLeft()) / 2,
+                (rect.topRight() + rect.bottomRight()) / 2
+            };
+
+            for (const QPointF &point : points)
+            {
+                qreal distance = QLineF(scenePos, point).length();
+                if (distance < minDistance)
+                {
+                    minDistance = distance;
+                    nearestPoint = point;
+                }
+            }
+        }
+    }
+
+    return nearestPoint;
+}
+
+void MainWindow::highlightNearestPoint(QPointF scenePos)
+{
+    QPointF nearestPoint = findNearestPoint(scenePos);
+
+    if (highlightedPoint)
+    {
+        scene->removeItem(highlightedPoint);
+        delete highlightedPoint;
+        highlightedPoint = nullptr;
+    }
+
+    if (nearestPoint != scenePos)
+    {
+        highlightedPoint = scene->addEllipse(nearestPoint.x() - 4, nearestPoint.y() - 4, 8, 8, QPen(Qt::blue), QBrush(Qt::blue));
+    }
+}
+void MainWindow::on_pushButtonLines_pressed()
+{
+    ui->groupBoxShapesToDrag->hide();
+}
 
 
+void MainWindow::on_pushButtonLines_released()
+{
+    ui->groupBoxLine->show();
+}
 
 
+void MainWindow::on_pushButtonShape_pressed()
+{
+    ui->groupBoxLine->hide();
+}
 
 
+void MainWindow::on_pushButtonShape_released()
+{
+    ui->groupBoxShapesToDrag->show();
+}
 
 
+void MainWindow::on_pushButtonDrawingTools_clicked()
+{
+    ui->groupBoxShapesToDraw->show();
+}
 
-
+void MainWindow::on_pushButtonLineDrag_clicked()
+{
+    currentShape = Line;
+}
 

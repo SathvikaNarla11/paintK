@@ -49,18 +49,21 @@ private:
     QPointF startPosition;
     QPointF endPosition;
 
-    enum Shape{ None, Rectangle, Select};
+    enum Shape{ None, Line, Rectangle, Select, RightAngleLine};
     Shape currentShape;
 
     QGraphicsScene *scene;
     QGraphicsRectItem *currentRectItem;
     QGraphicsRectItem *selectedRectItem;
     QGraphicsRectItem *highlightedRectItem;
+    QGraphicsEllipseItem *highlightedPoint;
     QVector<QGraphicsEllipseItem*> handles;
 
     QGraphicsEllipseItem *resizingHandle;
     bool resizing;
     QPointF resizeStartPos;
+
+    QGraphicsLineItem *currentLineItem;
 
 private slots:
     void startDragging();
@@ -71,10 +74,15 @@ private slots:
     void removeHighlightPoints();
     void highlightRectanglePoints();
 
-//    void handleHandleMousePress(QGraphicsSceneMouseEvent *event);
-//    void handleHandleMouseMove(QGraphicsSceneMouseEvent *event);
-//    void handleHandleMouseRelease(QGraphicsSceneMouseEvent *event);
     void updateHandlePositions(const QRectF &rect);
 
+    void on_pushButtonLines_pressed();
+    void on_pushButtonLines_released();
+    void on_pushButtonShape_pressed();
+    void on_pushButtonShape_released();
+    void on_pushButtonDrawingTools_clicked();
+    void on_pushButtonLineDrag_clicked();
+    QPointF findNearestPoint(QPointF scenePos);
+    void highlightNearestPoint(QPointF scenePos);
 };
 #endif // MAINWINDOW_H

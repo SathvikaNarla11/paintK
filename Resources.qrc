@@ -1,0 +1,31 @@
+<RCC>
+    <qresource prefix="/Resources">
+        <file>PaintKIcons/data-connection.png</file>
+        <file>PaintKIcons/diagonal-line.png</file>
+        <file>PaintKIcons/ellipse.png</file>
+        <file>PaintKIcons/ellipseDraw.png</file>
+        <file>PaintKIcons/icons8-add-file.png</file>
+        <file>PaintKIcons/icons8-add-tab-48.png</file>
+        <file>PaintKIcons/icons8-copy-48.png</file>
+        <file>PaintKIcons/icons8-cut-48.png</file>
+        <file>PaintKIcons/icons8-delete-file-48.png</file>
+        <file>PaintKIcons/icons8-paste-48.png</file>
+        <file>PaintKIcons/icons8-redo-48.png</file>
+        <file>PaintKIcons/icons8-save-as-48.png</file>
+        <file>PaintKIcons/icons8-undo-48.png</file>
+        <file>PaintKIcons/icons8-zoom-in-48.png</file>
+        <file>PaintKIcons/icons8-zoom-out-48.png</file>
+        <file>PaintKIcons/lineConnects.png</file>
+        <file>PaintKIcons/rectangle.png</file>
+        <file>PaintKIcons/rectangleDraw.png</file>
+        <file>PaintKIcons/rhomb-outline.png</file>
+        <file>PaintKIcons/rhombusDraw.png</file>
+        <file>PaintKIcons/rounded-rectangle.png</file>
+        <file>PaintKIcons/roundRectangleDraw.png</file>
+        <file>PaintKIcons/shapes.png</file>
+        <file>PaintKIcons/triangle.png</file>
+        <file>PaintKIcons/triangleDraw.png</file>
+        <file>PaintKIcons/zigzag.png</file>
+        <file>PaintKIcons/selection.png</file>
+    </qresource>
+</RCC>
