@@ -11,7 +11,10 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QPushButton>
 #include <QGraphicsEllipseItem>
+#include "connector.h"
+
 
 
 QT_BEGIN_NAMESPACE
@@ -33,6 +36,8 @@ protected:
 
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+    //void mouseMoveEvent(QGraphicsSceneMouseEvent *event);// overrides;
     void mouseReleaseEvent(QMouseEvent *event) override;
 
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -49,21 +54,30 @@ private:
     QPointF startPosition;
     QPointF endPosition;
 
-    enum Shape{ None, Line, Rectangle, Select, RightAngleLine};
+    enum Shape{ None, Line, Rectangle, Select, RightAngleLine, Connector};
     Shape currentShape;
 
     QGraphicsScene *scene;
     QGraphicsRectItem *currentRectItem;
     QGraphicsRectItem *selectedRectItem;
+    QGraphicsItem *selectItem;
+    bool setSelected = false;
     QGraphicsRectItem *highlightedRectItem;
     QGraphicsEllipseItem *highlightedPoint;
     QVector<QGraphicsEllipseItem*> handles;
+    QGraphicsPathItem *currentPathItem;
 
     QGraphicsEllipseItem *resizingHandle;
     bool resizing;
     QPointF resizeStartPos;
 
     QGraphicsLineItem *currentLineItem;
+
+    QGraphicsItem *sourceShape;
+    QGraphicsItem *destinationShape;
+    QPointF getBluePointPos(QGraphicsItem *item);
+    QPointF getRedPointPos(QGraphicsItem *item);
+    void addPointsToItem(QGraphicsPixmapItem* item, int width, int height);
 
 private slots:
     void startDragging();
@@ -84,5 +98,16 @@ private slots:
     void on_pushButtonLineDrag_clicked();
     QPointF findNearestPoint(QPointF scenePos);
     void highlightNearestPoint(QPointF scenePos);
+    void on_pushButtonRightConnect_clicked();
+    void on_pushButtonRightAngleConnect_clicked();
+    void on_pushButtonRoundRectangle_pressed();
+
+    void onSelectionChanged();
+    void on_pushButtonEllipse_pressed();
+    void on_pushButtonRhombus_pressed();
+
+
+//    void addPointsToItem(QGraphicsPixmapItem* item, int width, int height);
+
 };
 #endif // MAINWINDOW_H

@@ -9,7 +9,17 @@
 #include <QDropEvent>
 #include <QRectF>
 #include <QRect>
+#include <QBuffer>
+#include <QMimeData>
+#include <QDrag>
+#include <QImage>
+#include <QPixmap>
+#include <QGraphicsPixmapItem>
 #include <QGraphicsSceneMouseEvent>
+#include <QInputDialog>
+#include <QPen>
+#include <cmath>
+using namespace std;
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -36,6 +46,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->toolBar->addWidget(ui->pushButtonDrawingTools);
     ui->groupBoxShapesToDraw->hide();
 
+    connect(scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSelectionChanged);
+
     scene->setSceneRect(0, 0, ui->graphicsView->width(), ui->graphicsView->height());
 
 }
@@ -48,6 +60,7 @@ MainWindow::~MainWindow()
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+
     if (watched == ui->pushButtonRect && event->type() == QEvent::MouseButtonPress)
     {
         QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
@@ -57,7 +70,15 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             return true;
         }
     }
-
+    if (watched == ui->pushButtonEllipse && event->type() == QEvent::MouseButtonPress)
+    {
+        QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent->button() == Qt::LeftButton)
+        {
+            startDragging();
+            return true;
+        }
+    }
 
     if (watched == ui->graphicsView->viewport())
     {
@@ -79,6 +100,13 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             mouseReleaseEvent(mouseEvent);
             return true;
         }
+        else if (event->type() == QEvent::MouseButtonDblClick)
+        {
+            QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+            mouseDoubleClickEvent(mouseEvent);
+            return true;
+        }
+
 
         else if (event->type() == QEvent::DragEnter)
         {
@@ -111,7 +139,30 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
 {
     QPointF scenePos = ui->graphicsView->mapToScene(event->pos());
     QGraphicsItem *item = scene->itemAt(scenePos, QTransform());
+    QList<QGraphicsItem *> items = scene->items(scenePos);
+    if (!items.empty())
+    {
+        item->setSelected(true);
+        QGraphicsItem *item = items.first();
+        if (item->data(0) == "redPoint") {
+            sourceShape = item->parentItem();
+        } else if (item->data(0) == "bluePoint") {
+            destinationShape = item->parentItem();
+        }
+        else {
+            qDebug() << "Other item clicked.";
+        }
+    }
+    else {
+        qDebug() << "No items clicked.";
+    }
 
+
+    if (item)
+    {
+        item->setSelected(true);
+        qDebug() << "Item selected eredrf";
+    }
     if (currentShape == Rectangle && event->button() == Qt::LeftButton)
     {
         drawing = true;
@@ -126,6 +177,14 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         endPosition = scenePos;
         currentLineItem = scene->addLine(QLineF(startPosition, endPosition), QPen(Qt::black, 2));
     }
+    else if(currentShape == RightAngleLine && event->button() == Qt::LeftButton)
+    {
+        drawing = true;
+        startPosition = scenePos;
+        endPosition = scenePos;
+        currentPathItem = scene->addPath(QPainterPath(startPosition), QPen(Qt::black, 1));
+    }
+
     else if (currentShape == Select && event->button() == Qt::LeftButton)
     {
         QGraphicsRectItem *rectItem = dynamic_cast<QGraphicsRectItem *>(item);
@@ -148,14 +207,14 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
             highlightRectanglePoints();
         }
     }
-    //QGraphicsItem *item = scene->itemAt(event->scenePos(), QTransform());
     QGraphicsEllipseItem *handle = dynamic_cast<QGraphicsEllipseItem *>(item);
     if (handle && handles.contains(handle))
     {
         resizingHandle = handle;
-        resizingHandle->setBrush(Qt::green);  // Change to green when selected
+        resizingHandle->setBrush(Qt::green);
         resizing = true;
     }
+    QMainWindow::mousePressEvent(event);
 }
 
 void MainWindow:: mouseMoveEvent(QMouseEvent *event)
@@ -184,28 +243,65 @@ void MainWindow:: mouseMoveEvent(QMouseEvent *event)
         currentLineItem->setLine(QLineF(startPosition, endPosition));
         highlightNearestPoint(scenePos);
     }
+    else if(drawing && currentShape == RightAngleLine)
+    {
+        QPointF scenePos = ui->graphicsView->mapToScene(event->pos());
+        endPosition = scenePos;
+
+        QPainterPath path(startPosition);
+        if (qAbs(scenePos.x() - startPosition.x()) > qAbs(scenePos.y() - startPosition.y()))
+        {
+            path.lineTo(endPosition.x(), startPosition.y());
+
+        }
+        else
+        {
+            path.lineTo(startPosition.x(), endPosition.y());
+
+        }
+        path.lineTo(endPosition);
+
+        QPainterPathStroker stroker;
+        stroker.setWidth(1);
+        currentPathItem->setPath(stroker.createStroke(path));
+        highlightNearestPoint(scenePos);
+    }
     if (resizing && resizingHandle)
     {
-        QPointF handlePos = ui->graphicsView->mapToScene(event->pos());//event->scenePos();
+        QPointF handlePos = ui->graphicsView->mapToScene(event->pos());
         QRectF rect = selectedRectItem->rect();
         QRectF newRect = rect;
 
-        if (resizingHandle == handles[0]) {
+        if (resizingHandle == handles[0])
+        {
             newRect.setTopLeft(handlePos);
-
-        } else if (resizingHandle == handles[1]) {
+        }
+        else if (resizingHandle == handles[1])
+        {
             newRect.setTopRight(handlePos);
-        } else if (resizingHandle == handles[2]) {
+        }
+        else if (resizingHandle == handles[2])
+        {
             newRect.setBottomLeft(handlePos);
-        } else if (resizingHandle == handles[3]) {
+        }
+        else if (resizingHandle == handles[3])
+        {
             newRect.setBottomRight(handlePos);
-        } else if (resizingHandle == handles[4]) {
+        }
+        else if (resizingHandle == handles[4])
+        {
             newRect.setTop(handlePos.y());
-        } else if (resizingHandle == handles[5]) {
+        }
+        else if (resizingHandle == handles[5])
+        {
             newRect.setBottom(handlePos.y());
-        } else if (resizingHandle == handles[6]) {
+        }
+        else if (resizingHandle == handles[6])
+        {
             newRect.setLeft(handlePos.x());
-        } else if (resizingHandle == handles[7]) {
+        }
+        else if (resizingHandle == handles[7])
+        {
             newRect.setRight(handlePos.x());
         }
 
@@ -213,13 +309,46 @@ void MainWindow:: mouseMoveEvent(QMouseEvent *event)
         highlightedRectItem->setRect(newRect);
         updateHandlePositions(newRect);
     }
+    QMainWindow::mouseMoveEvent(event);
 }
-
 
 
 void MainWindow:: mouseReleaseEvent(QMouseEvent *event)
 {
+    if (sourceShape && destinationShape) {
+        QPointF sourcePos = getRedPointPos(sourceShape);
+        QPointF destPos = getBluePointPos(destinationShape);
 
+        if (sourcePos.isNull() || destPos.isNull()) {
+            qDebug() << "Invalid source or destination point positions.";
+            return;
+        }
+
+        QGraphicsLineItem *line = scene->addLine(QLineF(sourcePos, destPos));
+        line->setPen(QPen(Qt::black, 2));
+
+        bool sourceValid, destValid;
+        int sourceValue = sourceShape->data(1).toInt(&sourceValid);
+        int destValue = destinationShape->data(1).toInt(&destValid);
+
+        if (!sourceValid || !destValid) {
+            qDebug() << "Invalid source or destination shape values.";
+            return;
+        }
+
+        int sum = sourceValue + destValue;
+
+        QGraphicsTextItem *textItem = new QGraphicsTextItem(QString::number(sum));
+        textItem->setPos((sourcePos + destPos) / 2);
+        scene->addItem(textItem);
+
+        qDebug() << "Arrow drawn and sum calculated: " << sum;
+
+        sourceShape = nullptr;
+        destinationShape = nullptr;
+    } else {
+        qDebug() << "Source or destination shape is not set.";
+    }
     if (drawing && currentShape == Rectangle && event->button() == Qt::LeftButton)
     {
         drawing = false;
@@ -238,8 +367,6 @@ void MainWindow:: mouseReleaseEvent(QMouseEvent *event)
     {
         QPointF scenePos = ui->graphicsView->mapToScene(event->pos());
         QPointF nearestPoint = findNearestPoint(scenePos);
-
-        //currentLineItem->setLine(QLineF(startPosition, endPosition));
         if (nearestPoint != scenePos)
         {
             currentLineItem->setLine(QLineF(startPosition, nearestPoint));
@@ -255,17 +382,227 @@ void MainWindow:: mouseReleaseEvent(QMouseEvent *event)
         currentLineItem = nullptr;
         drawing = false;
     }
+    else if (drawing && currentShape == RightAngleLine)
+    {
+        drawing = false;
+        QPointF scenePos = ui->graphicsView->mapToScene(event->pos());
+        endPosition = scenePos;
+
+        QPainterPath path(startPosition);
+        if (qAbs(scenePos.x() - startPosition.x()) > qAbs(scenePos.y() - startPosition.y()))
+        {
+            path.lineTo(endPosition.x(), startPosition.y());
+        }
+        else
+        {
+            path.lineTo(startPosition.x(), endPosition.y());
+        }
+        path.lineTo(endPosition);
+
+        QPainterPathStroker stroker;
+        stroker.setWidth(1);
+        currentPathItem->setPath(stroker.createStroke(path));
+        highlightNearestPoint(scenePos);
+
+        if (highlightedPoint)
+        {
+            scene->removeItem(highlightedPoint);
+            delete highlightedPoint;
+            highlightedPoint = nullptr;
+        }
+
+        currentLineItem = nullptr;
+    }
     if (resizing && resizingHandle)
     {
-        resizingHandle->setBrush(Qt::red);  // Change back to red when resizing ends
+        resizingHandle->setBrush(Qt::red);
         resizingHandle = nullptr;
         resizing = false;
     }
+}
+QPointF MainWindow::getBluePointPos(QGraphicsItem *item)
+{
+    foreach (QGraphicsItem *child, item->childItems())
+    {
+        if (child->data(0) == "bluePoint")
+        {
+            return child->scenePos();
+        }
+    }
+    return QPointF();
+}
+
+QPointF MainWindow::getRedPointPos(QGraphicsItem *item)
+{
+    foreach (QGraphicsItem *child, item->childItems())
+    {
+        if (child->data(0) == "redPoint")
+        {
+            return child->scenePos();
+        }
+    }
+    return QPointF();
+}
+
+void MainWindow::paintEvent(QPaintEvent *event)
+{
+
+}
+
+static double valueRoundRect = 0;
+static double valueEllipse = 0;
+static double valueRhombus = 0;
+void MainWindow::mouseDoubleClickEvent(QMouseEvent *event)
+{
+
+    if (event->button() == Qt::LeftButton)
+    {
+        QPointF scenePos = ui->graphicsView->mapToScene(event->pos());
+        QList<QGraphicsItem*> itemsAtPos = scene->items(scenePos);
+
+        for (QGraphicsItem *item : itemsAtPos)
+        {
+            qDebug() << "Item at position: with data:" << item->data(0).toString();
+            QString shapeType = item->data(0).toString();
+            bool ok;
+
+            if (shapeType == "RoundRect")
+            {
+                valueRoundRect = QInputDialog::getDouble(this, "Enter Value Round Rectangle", "Value:", 0, 0, 10000, 2, &ok);
+                if (ok)
+                {
+                    qDebug() << "Value RoundRect" << valueRoundRect;
+                }
+                else
+                {
+                    qDebug() << "Input dialog canceled";
+                }
+            }
+            if (shapeType == "Ellipse")
+            {
+                valueEllipse = QInputDialog::getDouble(this, "Enter Value Ellipse", "Value:", 0, 0, 10000, 2, &ok);
+                if (ok)
+                {
+                    qDebug() << "Value Ellipse" << valueEllipse;
+                }
+                else
+                {
+                    qDebug() << "Input dialog canceled";
+                }
+            }
+            if (shapeType == "Rhombus")
+            {
+                double valueRhombus = QInputDialog::getDouble(this, "Enter Value Rhombus", "Value:", 0, 0, 10000, 2, &ok);
+                if (ok)
+                {
+                    qDebug() << "Value Rhombus" << valueRhombus;
+                }
+                else
+                {
+                    qDebug() << "Input dialog canceled";
+                }
+            }
+        }
+    }
+}
+
+
+void MainWindow::startDragging()
+{
+    qDebug() << "Dragging started";
+    QMimeData *mimeData = new QMimeData;
+    mimeData->setData("application/x-rect-item", QByteArray());
+
+    QDrag *drag = new QDrag(ui->pushButtonRect);
+    drag->setMimeData(mimeData);
+    drag->exec(Qt::CopyAction | Qt::MoveAction);
+
+    QDrag *dragEllipse = new QDrag(ui->pushButtonEllipse);
+    dragEllipse->setMimeData(mimeData);
+    dragEllipse->exec(Qt::CopyAction | Qt::MoveAction);
+
+    QDrag *dragRhombus = new QDrag(ui->pushButtonRhombus);
+    dragRhombus->setMimeData(mimeData);
+    dragRhombus->exec(Qt::CopyAction | Qt::MoveAction);
+
+}
+
+void MainWindow::on_pushButtonRoundRectangle_pressed()
+{
+    qDebug()<<"Round Rectangle";
+    QIcon icon = ui->pushButtonRoundRectangle->icon();
+    QPixmap pixmap = icon.pixmap(32, 32);
+    QImage image = pixmap.toImage();
+    QByteArray imageData;
+    QBuffer buffer(&imageData);
+    buffer.open(QIODevice::WriteOnly);
+    image.save(&buffer, "PNG");
+
+    QMimeData *mimeData = new QMimeData;
+    mimeData->setData("application/x-image", imageData);
+
+    QDrag *drag = new QDrag(ui->pushButtonRoundRectangle);
+    drag->setMimeData(mimeData);
+
+    drag->exec(Qt::CopyAction);
+}
+
+void MainWindow::on_pushButtonEllipse_pressed()
+{
+    qDebug()<<"ellipse";
+    QIcon icon = ui->pushButtonEllipse->icon();
+    QPixmap pixmap = icon.pixmap(32, 32);
+    QImage image = pixmap.toImage();
+    QByteArray imageData;
+    QBuffer buffer(&imageData);
+    buffer.open(QIODevice::WriteOnly);
+    image.save(&buffer, "PNG");
+
+    QMimeData *mimeData = new QMimeData;
+    mimeData->setData("application/x-ellipse-image", imageData);
+
+    QDrag *dragEllipse = new QDrag(ui->pushButtonEllipse);
+    dragEllipse->setMimeData(mimeData);
+    dragEllipse->exec(Qt::CopyAction | Qt::MoveAction);
+}
+
+void MainWindow::on_pushButtonRhombus_pressed()
+{
+    qDebug()<<"Rhombus";
+    QIcon icon = ui->pushButtonRhombus->icon();
+    QPixmap pixmap = icon.pixmap(32, 32);
+    QImage image = pixmap.toImage();
+    QByteArray imageData;
+    QBuffer buffer(&imageData);
+    buffer.open(QIODevice::WriteOnly);
+    image.save(&buffer, "PNG");
+
+    QMimeData *mimeData = new QMimeData;
+    mimeData->setData("application/x-rhombus-image", imageData);
+
+    QDrag *dragRhombus = new QDrag(ui->pushButtonRhombus);
+    dragRhombus->setMimeData(mimeData);
+    dragRhombus->exec(Qt::CopyAction | Qt::MoveAction);
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
     if (event->mimeData()->hasFormat("application/x-rect-item"))
+    {
+        event->acceptProposedAction();
+        qDebug() << "Drag entered with correct format";
+    }
+    else if (event->mimeData()->hasFormat("application/x-image"))
+    {
+        event->acceptProposedAction();
+        qDebug() << "Drag entered with correct format";
+    }
+    else if (event->mimeData()->hasFormat("application/x-ellipse-image"))
+    {
+        event->acceptProposedAction();
+        qDebug() << "Drag entered with correct format";
+    }
+    else if (event->mimeData()->hasFormat("application/x-rhombus-image"))
     {
         event->acceptProposedAction();
         qDebug() << "Drag entered with correct format";
@@ -283,44 +620,114 @@ void MainWindow::dragMoveEvent(QDragMoveEvent *event)
 
 void MainWindow::dropEvent(QDropEvent *event)
 {
-
     qDebug() << "Dropped";
-    if (event->mimeData()->hasFormat("application/x-rect-item"))
+    const QMimeData *mimeData = event->mimeData();
+
+    foreach (const QString &format, mimeData->formats()) {
+        qDebug() << "Available format:" << format;
+    }
+
+    if (mimeData->hasFormat("application/x-rect-item"))
     {
         event->acceptProposedAction();
         QPointF viewPos = event->pos();
         QPointF scenePos = ui->graphicsView->mapToScene(viewPos.toPoint());
 
-        QRectF rect( scenePos, QSizeF(100, 100));
-        scene->addRect(rect);
+        QRectF rect(scenePos, QSizeF(100, 100));
+        QGraphicsRectItem *rectItem = scene->addRect(rect);
+        rectItem->setFlag(QGraphicsItem::ItemIsSelectable);
+        rectItem->setFlag(QGraphicsItem::ItemIsMovable);
+        rectItem->setData(0, "Rectangle");
+
+    }
+    else if (mimeData->hasFormat("application/x-image"))
+    {
+        QByteArray imageData = mimeData->data("application/x-image");
+        QImage image;
+        image.loadFromData(imageData);
+
+        QPointF scenePos = ui->graphicsView->mapToScene(event->pos());
+
+        QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(QPixmap::fromImage(image));
+        pixmapItem->setPos(scenePos);
+        pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable);
+        pixmapItem->setFlag(QGraphicsItem::ItemIsMovable);
+        pixmapItem->setData(0, "RoundRect");
+        qDebug()<<"Data set for item:" << pixmapItem->data(0).toString();
+        scene->addItem(pixmapItem);
+
+        addPointsToItem(pixmapItem, image.width(), image.height());
+
+        event->acceptProposedAction();
+    }
+    else if (mimeData->hasFormat("application/x-ellipse-image"))
+    {
+        QByteArray imageData = mimeData->data("application/x-ellipse-image");
+        QImage image;
+        image.loadFromData(imageData);
+
+        QPointF scenePos = ui->graphicsView->mapToScene(event->pos());
+
+        QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(QPixmap::fromImage(image));
+        pixmapItem->setPos(scenePos);
+        pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable);
+        pixmapItem->setFlag(QGraphicsItem::ItemIsMovable);
+        pixmapItem->setData(0, "Ellipse");
+        scene->addItem(pixmapItem);
+
+        addPointsToItem(pixmapItem, image.width(), image.height());
+
+        event->acceptProposedAction();
+    }
+    else if (mimeData->hasFormat("application/x-rhombus-image"))
+    {
+        QByteArray imageData = mimeData->data("application/x-rhombus-image");
+        QImage image;
+        image.loadFromData(imageData);
+
+        QPointF scenePos = ui->graphicsView->mapToScene(event->pos());
+
+        QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(QPixmap::fromImage(image));
+        pixmapItem->setPos(scenePos);
+        pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable);
+        pixmapItem->setFlag(QGraphicsItem::ItemIsMovable);
+        pixmapItem->setData(0, "Rhombus");
+        scene->addItem(pixmapItem);
+
+        addPointsToItem(pixmapItem, image.width(), image.height());
+
+        event->acceptProposedAction();
     }
     else
     {
         qDebug() << "Dropped with incorrect format";
     }
-
 }
+QGraphicsEllipseItem* selectedPoint = nullptr;
+
+void MainWindow::addPointsToItem(QGraphicsPixmapItem* item, int width, int height)
+{
+    QGraphicsEllipseItem* startPoint = new QGraphicsEllipseItem(-5, -5, 10, 10, item);
+    startPoint->setBrush(Qt::red);
+    startPoint->setPos(-5, 16); // Red point at top-left
+    startPoint->setZValue(1);
+    startPoint->setData(0, "redPoint");
+
+    QGraphicsEllipseItem* endPoint = new QGraphicsEllipseItem(-5, -5, 10, 10, item);
+    endPoint->setBrush(Qt::blue);
+    endPoint->setPos(width+5, height - 16); // Blue point at bottom-right
+    endPoint->setZValue(1);
+    endPoint->setData(0,"bluePoint");
+
+    qDebug() << "Red point added at:" << startPoint->pos();
+    qDebug() << "Blue point added at:" << endPoint->pos();
+}
+
 
 void MainWindow::on_pushButtonRectDraw_clicked()
 {
     currentShape = Rectangle;
     ui->groupBoxShapesToDraw->hide();
-}
-
-void MainWindow::startDragging()
-{
-    qDebug() << "Dragging started";
-    QMimeData *mimeData = new QMimeData;
-    mimeData->setData("application/x-rect-item", QByteArray());
-
-    QDrag *drag = new QDrag(ui->pushButtonRect);
-    drag->setMimeData(mimeData);
-    drag->exec(Qt::CopyAction | Qt::MoveAction);
-}
-
-void MainWindow:: paintEvent(QPaintEvent *event)
-{
-    Q_UNUSED(event);
 }
 
 void MainWindow::on_pushButtonSelect_clicked()
@@ -369,13 +776,13 @@ void MainWindow::addHandle(const QPointF &pos)
 
 void MainWindow::removeHighlightPoints()
 {
-    for (auto handle : handles) {
+    for (auto handle : handles)
+    {
         scene->removeItem(handle);
         delete handle;
     }
     handles.clear();
 }
-
 
 void MainWindow::updateHandlePositions(const QRectF &rect)
 {
@@ -445,6 +852,40 @@ void MainWindow::highlightNearestPoint(QPointF scenePos)
         highlightedPoint = scene->addEllipse(nearestPoint.x() - 4, nearestPoint.y() - 4, 8, 8, QPen(Qt::blue), QBrush(Qt::blue));
     }
 }
+
+
+void MainWindow::onSelectionChanged()
+{
+    QList<QGraphicsItem *> selectedItems = scene->selectedItems();
+    for (QGraphicsItem *item : selectedItems)
+    {
+        if (QGraphicsPixmapItem *pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(item))
+        {
+            QGraphicsRectItem *border = new QGraphicsRectItem(pixmapItem->boundingRect());
+            border->setPen(QPen(Qt::red, 2));
+            border->setParentItem(pixmapItem);
+        }
+        else if (QGraphicsRectItem *rectItem = dynamic_cast<QGraphicsRectItem *>(item))
+        {
+            rectItem->setPen(QPen(Qt::red, 2));  // Set border color and width
+        }
+    }
+
+    if (!selectedItems.isEmpty()) {
+        QGraphicsItem *selectedItem = selectedItems.first();
+        if (auto pixmapItem = dynamic_cast<QGraphicsPixmapItem *>(selectedItem)) {
+            pixmapItem->setFlag(QGraphicsItem::ItemIsMovable);
+            pixmapItem->setFlag(QGraphicsItem::ItemIsSelectable);
+        }
+        else if (auto rectItem = dynamic_cast<QGraphicsRectItem *>(selectedItem)) {
+            rectItem->setFlag(QGraphicsItem::ItemIsMovable);
+            rectItem->setFlag(QGraphicsItem::ItemIsSelectable);
+        }
+    }
+    qDebug()<<"selected count"<<selectedItems.count();
+}
+
+
 void MainWindow::on_pushButtonLines_pressed()
 {
     ui->groupBoxShapesToDrag->hide();
@@ -478,4 +919,20 @@ void MainWindow::on_pushButtonLineDrag_clicked()
 {
     currentShape = Line;
 }
+
+
+void MainWindow::on_pushButtonRightAngleConnect_clicked()
+{
+    currentShape = RightAngleLine;
+}
+
+
+
+void MainWindow::on_pushButtonRightConnect_clicked()
+{
+
+}
+
+
+
 
